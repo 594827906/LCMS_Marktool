@@ -63,7 +63,7 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
         suffix_label = QtWidgets.QLabel()
         suffix_label.setText('Code of file (suffix, will be increased during annotation): ')
         self.suffix_getter = QtWidgets.QLineEdit(self)
-        self.suffix_getter.setText('0')
+        self.suffix_getter.setText('1')
 
         mz_label = QtWidgets.QLabel()
         mz_label.setText('m/z deviation:')
