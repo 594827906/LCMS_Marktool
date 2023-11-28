@@ -51,17 +51,17 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
         # parameters selection
 
         instrumental_label = QtWidgets.QLabel()
-        instrumental_label.setText('Instrumentals description')
+        instrumental_label.setText('仪器描述（非必要）：')
         self.instrumental_getter = QtWidgets.QLineEdit(self)
         self.instrumental_getter.setText('Q-oa-TOF, total time=10 min, scan frequency=10Hz')
 
         prefix_label = QtWidgets.QLabel()
-        prefix_label.setText('Prefix of filename: ')
+        prefix_label.setText('文件前缀: ')
         self.prefix_getter = QtWidgets.QLineEdit(self)
         self.prefix_getter.setText('Example')
 
         suffix_label = QtWidgets.QLabel()
-        suffix_label.setText('Code of file (suffix, will be increased during annotation): ')
+        suffix_label.setText('文件序号 (后缀名, 随着标注依次+1): ')
         self.suffix_getter = QtWidgets.QLineEdit(self)
         self.suffix_getter.setText('1')
 
