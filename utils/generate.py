@@ -13,6 +13,36 @@ from utils.show_list import FileListWidget, GetFolderWidget, ROIListWidget
 from utils.threading import Worker
 
 
+class ReAnnotationParameterWindow(QtWidgets.QDialog):
+    def __init__(self, parent: PlotWindow):
+        self.mode = 'reannotation'
+        self.parent = parent
+        super().__init__(parent)
+        self.setWindowTitle('继续标注')
+
+        save_to_label = QtWidgets.QLabel()
+        save_to_label.setText('选择要继续标注的目录')
+        self.folder_widget = GetFolderWidget()
+
+        self.run_button = QtWidgets.QPushButton('继续')
+        self.run_button.clicked.connect(self.start_reannotation)
+
+        main_layout = QtWidgets.QVBoxLayout()
+        main_layout.addWidget(save_to_label)
+        main_layout.addWidget(self.folder_widget)
+        main_layout.addWidget(self.run_button)
+
+        self.setLayout(main_layout)
+
+    def start_reannotation(self):
+        folder = self.folder_widget.get_folder()
+        subwindow = AnnotationMainWindow([], folder, None, None,
+                                         None, self.mode, None,
+                                         None, parent=self.parent)
+        subwindow.show()
+        self.close()
+
+
 class AnnotationParameterWindow(QtWidgets.QDialog):
     def __init__(self, files, mode, parent: PlotWindow):
         self.mode = mode
@@ -56,14 +86,14 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
         self.instrumental_getter.setText('Q-oa-TOF, total time=10 min, scan frequency=10Hz')
 
         prefix_label = QtWidgets.QLabel()
-        prefix_label.setText('文件前缀: ')
+        prefix_label.setText('文件前缀：')
         self.prefix_getter = QtWidgets.QLineEdit(self)
         self.prefix_getter.setText('Example')
 
         suffix_label = QtWidgets.QLabel()
-        suffix_label.setText('文件序号 (后缀名, 随着标注依次+1): ')
+        suffix_label.setText('文件序号 (后缀名， 随着标注依次+1)：')
         self.suffix_getter = QtWidgets.QLineEdit(self)
-        self.suffix_getter.setText('1')
+        self.suffix_getter.setText('0')  # TODO:改为1，数组起始也要修改
 
         mz_label = QtWidgets.QLabel()
         mz_label.setText('m/z deviation:')
@@ -71,7 +101,7 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
         self.mz_getter.setText('0.005')
 
         roi_points_label = QtWidgets.QLabel()
-        roi_points_label.setText('ROI的最小长度（扫描数）')
+        roi_points_label.setText('ROI的最小长度（扫描数）：')
         self.roi_points_getter = QtWidgets.QLineEdit(self)
         self.roi_points_getter.setText('15')
 
@@ -100,8 +130,8 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
 
         # main layout
         main_layout = QtWidgets.QHBoxLayout()
-        main_layout.addLayout(file_layout)
-        main_layout.addLayout(parameter_layout)
+        main_layout.addLayout(file_layout, 2)
+        main_layout.addLayout(parameter_layout, 8)
 
         self.setLayout(main_layout)
 
@@ -122,6 +152,7 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
                 raise ValueError
 
             worker = Worker(get_ROIs, path2mzml, delta_mz, min_points, dropped_points)
+            worker.signals.result.connect(self._save)
             worker.signals.result.connect(self._start_annotation)
             self.parent.run_thread('ROI detection:', worker)  # 进度条
 
@@ -133,10 +164,31 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
             msg.setIcon(QtWidgets.QMessageBox.Warning)
             msg.exec_()
 
+    def _save(self, rois):
+        print('save in, length of roi = ', len(rois))
+        for file_suffix in range(0, len(rois)):
+            dropped_points = int(self.dropped_points_getter.text())
+            filename = f'{self.file_prefix}_{file_suffix}.json'
+            plotted_path = os.path.join(self.folder, filename)
+            code = os.path.basename(plotted_path)
+            code = code[:code.rfind('.')]
+            print('saving, plotted_path = ', plotted_path, 'rois[] = ', rois[file_suffix])
+            ROI.save_annotated(rois[file_suffix], plotted_path, code, 'unmarked',
+                               drop_points=dropped_points, description=self.description)
+            file_suffix += 1
+        # if current_flag:
+        #     current_flag = False
+        #     annotated_rois_list.addFile(plotted_path)
+        #     file_suffix += 1
+        # else:
+        #     plotted_item.setSelected(False)
+        #     index = min(annotated_rois_list.row(plotted_item) + 1, annotated_rois_list.count() - 1)
+        #     plotted_item = annotated_rois_list.item(index)
+        #     plotted_item.setSelected(True)
+
     def _start_annotation(self, rois):
-        self.rois = rois
         dropped_points = int(self.dropped_points_getter.text())
-        subwindow = AnnotationMainWindow(self.rois, self.folder, self.file_prefix, self.file_suffix,
+        subwindow = AnnotationMainWindow(rois, self.folder, self.file_prefix, self.file_suffix,
                                          self.description, self.mode, self.minimum_peak_points,
                                          dropped_points, parent=self.parent)
 
@@ -161,8 +213,8 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         self.current_flag = False
 
         self.ROIs = ROIs
-        np.random.seed(1313)
-        np.random.shuffle(self.ROIs)
+        # np.random.seed(1313)
+        # np.random.shuffle(self.ROIs)
 
         self.figure = plt.figure()  # a figure instance to plot on
         self.canvas = FigureCanvas(self.figure)
@@ -201,7 +253,7 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         canvas_layout.addWidget(self.canvas)
 
         # ROI list layout
-        roi_label = QtWidgets.QLabel('当前文件ROI总数：')
+        roi_label = QtWidgets.QLabel('当前文件ROI总数：')  # TODO:当模式为继续标注时，读取目录下的文件总数
         self.roi_cnt = QtWidgets.QLabel(self)
         self.roi_cnt.setNum(len(self.ROIs))  # 获取当前生成ROI的个数
         # annotation progress
@@ -356,27 +408,28 @@ class AnnotationMainWindow(QtWidgets.QDialog):
 
     # Visualization
     def plot_current(self):
-        try:
-            if not self.current_flag:
-                self.current_flag = True
-                self.current_description = self.description
-                self.plotted_roi = self.ROIs[self.file_suffix]  # 标注完成后，list index out of range：跳except弹出完成提示
-                filename = f'{self.file_prefix}_{self.file_suffix}.json'
-                self.plotted_path = os.path.join(self.folder, filename)
+        if self.mode != 'reannotation':
+            try:
+                if not self.current_flag:
+                    self.current_flag = True
+                    self.current_description = self.description
+                    self.plotted_roi = self.ROIs[self.file_suffix]  # 标注完成后，list index out of range：跳except弹出完成提示
+                    filename = f'{self.file_prefix}_{self.file_suffix}.json'
+                    self.plotted_path = os.path.join(self.folder, filename)
 
-                self.figure.clear()
-                ax = self.figure.add_subplot(111)
-                ax.plot(self.plotted_roi.i, label=filename)
-                title = f'mz = {self.plotted_roi.mzmean:.3f}, ' \
-                        f'rt = {self.plotted_roi.rt[0]:.1f} - {self.plotted_roi.rt[1]:.1f}'
-                ax.legend(loc='best')
-                ax.set_title(title)
-                self.canvas.draw()  # refresh canvas
-        except IndexError:
-            msg = QtWidgets.QMessageBox(self)
-            msg.setText('已标注完所有ROI')
-            msg.setIcon(QtWidgets.QMessageBox.Warning)
-            msg.exec_()
+                    self.figure.clear()
+                    ax = self.figure.add_subplot(111)
+                    ax.plot(self.plotted_roi.i, label=filename)
+                    title = f'mz = {self.plotted_roi.mzmean:.3f}, ' \
+                            f'rt = {self.plotted_roi.rt[0]:.1f} - {self.plotted_roi.rt[1]:.1f}'
+                    ax.legend(loc='best')
+                    ax.set_title(title)
+                    self.canvas.draw()  # refresh canvas
+            except IndexError:
+                msg = QtWidgets.QMessageBox(self)
+                msg.setText('已标注完所有ROI')
+                msg.setIcon(QtWidgets.QMessageBox.Warning)
+                msg.exec_()
 
     def plot_chosen(self):
         filename = self.plotted_item.text()
@@ -396,9 +449,13 @@ class AnnotationMainWindow(QtWidgets.QDialog):
             title = 'label = noise, ' + title
         elif roi['label'] == 1:
             title = 'label = peak, ' + title
+        else:
+            title = 'unmarked, ' + title
 
         for border, peak_score in zip(roi['borders'], roi["peaks' score"]):
             begin, end = border
+            if begin < 0:
+                begin = 0
             ax.fill_between(range(begin, end + 1), self.plotted_roi.i[begin:end + 1], alpha=0.5,
                             label=f"score: {peak_score}, borders={begin}-{end}")
 
@@ -529,13 +586,22 @@ class OnePeakScoreWindow(QtWidgets.QDialog):
     def save(self):
         try:
             code = os.path.basename(self.parent.plotted_path)
+            with open(code) as json_file:
+                roi = json.load(json_file)
+            label = roi['label']
+            if label != 'unmarked':
+                dropped_points = self.parent.dropped_points
+                print('unmarked', dropped_points)
+            else:
+                dropped_points = roi['drop points']
+                print('marked', dropped_points)
+
             code = code[:code.rfind('.')]
             label = 1
             borders = []
             peak_score = self.peak_score_getter.text()
             peaks_score = [peak_score]
             roi_length = self.parent.plotted_roi.scan[1] - self.parent.plotted_roi.scan[0]  # 获取ROI scan数
-            dropped_points = self.parent.dropped_points
 
             begin = dropped_points - 1
             end = roi_length - dropped_points + 1  # 根据设置的最大零点数自动标记峰

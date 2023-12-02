@@ -75,7 +75,7 @@ class FileListWidget(ClickableListWidget):
         return self.file2path[item.text()]
 
 
-class ROIListWidget(ClickableListWidget):
+class ROIListWidget(ClickableListWidget):  # 暂时没用
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.raw_rois_list = None

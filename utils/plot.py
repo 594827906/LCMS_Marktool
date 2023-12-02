@@ -82,6 +82,7 @@ class PlotWindow(QtWidgets.QWidget):
         if not self._label2line:  # in case if 'feature' was plotted
             self._figure.clear()
             self._ax = self._figure.add_subplot(111)
+            self._ax.set_title('TIC diagram')
             self._ax.set_xlabel('Retention time [min]')
             self._ax.set_ylabel('Intensity')
             self._ax.ticklabel_format(axis='y', scilimits=(0, 0))  # 使用科学计数法

@@ -1,3 +1,4 @@
+import os
 import json
 import pymzml
 import numpy as np
@@ -35,7 +36,7 @@ class ROI:
         return 'mz = {:.4f}, rt = {:.2f} - {:.2f}'.format(self.mzmean, self.rt[0], self.rt[1])
 
     def save_annotated(self, path, code=None, label=0, number_of_peaks=0, peaks_score=None, borders=None,
-                       description=None):
+                       drop_points=3, description=None):
         roi = dict()
         roi['code'] = code
         roi['label'] = label
@@ -43,11 +44,13 @@ class ROI:
         roi["peaks' score"] = [] if peaks_score is None else peaks_score
         roi['borders'] = [] if borders is None else borders
         roi['description'] = description
+        roi['drop points'] = drop_points
 
         roi['rt'] = self.rt
         roi['scan'] = self.scan
         roi['intensity'] = list(map(float, self.i))
         roi['mz'] = list(map(float, self.mz))
+        print(path)
 
         with open(path, 'w') as jsonfile:
             json.dump(roi, jsonfile)
@@ -211,6 +214,7 @@ def get_ROIs(path, delta_mz=0.005, required_points=15, dropped_points=3, progres
         # change scan numbers (necessary for future matching)
         roi.scan = (roi.scan[0] - dropped_points, roi.scan[1] + dropped_points)
         assert roi.scan[1] - roi.scan[0] == len(roi.i) - 1
+    # print(ROIs)
     return ROIs
 
 

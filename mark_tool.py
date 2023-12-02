@@ -1,7 +1,7 @@
 import sys
 from utils.plot import PlotWindow, EICParameterWindow
 from utils.show_list import find_mzML, FileListWidget, PeakListWidget, ROIListWidget, ProgressBarsListItem
-from utils.generate import AnnotationParameterWindow
+from utils.generate import AnnotationParameterWindow, ReAnnotationParameterWindow
 from PyQt5 import QtCore, QtGui, QtWidgets
 from functools import partial
 
@@ -26,15 +26,15 @@ class MainWindow(PlotWindow):
     #     self.cur_len: int = 20
 
     def init_ui(self):
-        self.setWindowTitle('ROI标注工具')
+        self.setWindowTitle('mzml峰标注工具')
 
         # 左侧布局
-        open_file_btn = QtWidgets.QPushButton('打开.mzML文件')
+        open_file_btn = QtWidgets.QPushButton('导入.mzML文件')
         open_file_btn.clicked.connect(self.open_file_btn)
         gen_roi_btn = QtWidgets.QPushButton('生成ROI并标注')
         gen_roi_btn.clicked.connect(self.gen_roi_btn)
-        clear_plot_btn = QtWidgets.QPushButton('清除画布')
-        clear_plot_btn.clicked.connect(self.clear_plot_btn)
+        continue_btn = QtWidgets.QPushButton('继续标注')
+        continue_btn.clicked.connect(self.continue_btn)
 
         file_list_label = QtWidgets.QLabel('文件列表：')
 
@@ -46,7 +46,7 @@ class MainWindow(PlotWindow):
         layout_left = QtWidgets.QVBoxLayout()
         layout_left.addWidget(open_file_btn)
         layout_left.addWidget(gen_roi_btn)
-        # layout_left.addWidget(clear_plot_btn)
+        layout_left.addWidget(continue_btn)
         layout_left.addWidget(file_list_label)
         layout_left.addWidget(self._list_of_files, 5)
         # layout_left.addWidget(roi_list_label)
@@ -56,7 +56,7 @@ class MainWindow(PlotWindow):
         layout_mid = QtWidgets.QHBoxLayout()
         layout_plot = QtWidgets.QVBoxLayout()
         layout_plot.addWidget(self._toolbar)
-        layout_plot.addWidget(self._canvas, 19)
+        layout_plot.addWidget(self._canvas, 9)
 
         # 进度条布局
         scrollable_pb_list = QtWidgets.QScrollArea()
@@ -97,8 +97,10 @@ class MainWindow(PlotWindow):
         subwindow = AnnotationParameterWindow(files, mode, self)
         subwindow.show()
 
-    def clear_plot_btn(self):
-        self._canvas.destroy()
+    def continue_btn(self):
+        mode = 'reannotation'
+        subwindow = ReAnnotationParameterWindow(self)
+        subwindow.show()
 
     # def export_btn(self):
     #     if self._list_of_peaks.count() > 0:
