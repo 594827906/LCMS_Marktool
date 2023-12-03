@@ -1,7 +1,7 @@
 import sys
 from utils.plot import PlotWindow, EICParameterWindow
 from utils.show_list import find_mzML, FileListWidget, PeakListWidget, ROIListWidget, ProgressBarsListItem
-from utils.generate import AnnotationParameterWindow, ReAnnotationParameterWindow
+from utils.annotation_window import AnnotationParameterWindow, ReAnnotationParameterWindow
 from PyQt5 import QtCore, QtGui, QtWidgets
 from functools import partial
 
