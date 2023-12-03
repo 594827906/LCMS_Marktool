@@ -21,7 +21,7 @@ class ReAnnotationParameterWindow(QtWidgets.QDialog):
         self.setWindowTitle('继续标注')
 
         save_to_label = QtWidgets.QLabel()
-        save_to_label.setText('选择要继续标注的目录')
+        save_to_label.setText('选择已生成过ROI的目录')
         self.folder_widget = GetFolderWidget()
 
         self.run_button = QtWidgets.QPushButton('继续')
@@ -154,7 +154,7 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
             worker = Worker(get_ROIs, path2mzml, delta_mz, min_points, dropped_points)
             worker.signals.result.connect(self._save)
             worker.signals.result.connect(self._start_annotation)
-            self.parent.run_thread('ROI detection:', worker)  # 进度条
+            self.parent.run_thread('构建ROI并保存到指定目录：', worker)  # 进度条
 
             self.close()
         except ValueError:
@@ -172,7 +172,7 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
             plotted_path = os.path.join(self.folder, filename)
             code = os.path.basename(plotted_path)
             code = code[:code.rfind('.')]
-            print('saving, plotted_path = ', plotted_path, 'rois[] = ', rois[file_suffix])
+            # print('saving, plotted_path = ', plotted_path, 'rois[] = ', rois[file_suffix])
             ROI.save_annotated(rois[file_suffix], plotted_path, code, 'unmarked',
                                drop_points=dropped_points, description=self.description)
             file_suffix += 1
@@ -239,8 +239,8 @@ class AnnotationMainWindow(QtWidgets.QDialog):
             self.annotated_rois_list.addFile(os.path.join(self.folder, file))
 
         self._init_ui()  # initialize user interface
-
-        self.plot_current()  # initial plot
+        if mode != 'reannotation':
+            self.plot_current()  # initial plot
 
     def _init_ui(self):
         """
@@ -408,28 +408,27 @@ class AnnotationMainWindow(QtWidgets.QDialog):
 
     # Visualization
     def plot_current(self):
-        if self.mode != 'reannotation':
-            try:
-                if not self.current_flag:
-                    self.current_flag = True
-                    self.current_description = self.description
-                    self.plotted_roi = self.ROIs[self.file_suffix]  # 标注完成后，list index out of range：跳except弹出完成提示
-                    filename = f'{self.file_prefix}_{self.file_suffix}.json'
-                    self.plotted_path = os.path.join(self.folder, filename)
+        try:
+            if not self.current_flag:
+                self.current_flag = True
+                self.current_description = self.description
+                self.plotted_roi = self.ROIs[self.file_suffix]  # 标注完成后，list index out of range：跳except弹出完成提示
+                filename = f'{self.file_prefix}_{self.file_suffix}.json'
+                self.plotted_path = os.path.join(self.folder, filename)
 
-                    self.figure.clear()
-                    ax = self.figure.add_subplot(111)
-                    ax.plot(self.plotted_roi.i, label=filename)
-                    title = f'mz = {self.plotted_roi.mzmean:.3f}, ' \
-                            f'rt = {self.plotted_roi.rt[0]:.1f} - {self.plotted_roi.rt[1]:.1f}'
-                    ax.legend(loc='best')
-                    ax.set_title(title)
-                    self.canvas.draw()  # refresh canvas
-            except IndexError:
-                msg = QtWidgets.QMessageBox(self)
-                msg.setText('已标注完所有ROI')
-                msg.setIcon(QtWidgets.QMessageBox.Warning)
-                msg.exec_()
+                self.figure.clear()
+                ax = self.figure.add_subplot(111)
+                ax.plot(self.plotted_roi.i, label=filename)
+                title = f'mz = {self.plotted_roi.mzmean:.3f}, ' \
+                        f'rt = {self.plotted_roi.rt[0]:.1f} - {self.plotted_roi.rt[1]:.1f}'
+                ax.legend(loc='best')
+                ax.set_title(title)
+                self.canvas.draw()  # refresh canvas
+        except IndexError:
+            msg = QtWidgets.QMessageBox(self)
+            msg.setText('已标注完所有ROI')
+            msg.setIcon(QtWidgets.QMessageBox.Warning)
+            msg.exec_()
 
     def plot_chosen(self):
         filename = self.plotted_item.text()
@@ -450,7 +449,7 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         elif roi['label'] == 1:
             title = 'label = peak, ' + title
         else:
-            title = 'unmarked, ' + title
+            title = 'label = unmarked, ' + title
 
         for border, peak_score in zip(roi['borders'], roi["peaks' score"]):
             begin, end = border
@@ -586,13 +585,13 @@ class OnePeakScoreWindow(QtWidgets.QDialog):
     def save(self):
         try:
             code = os.path.basename(self.parent.plotted_path)
-            with open(code) as json_file:
+            with open(self.parent.plotted_path) as json_file:
                 roi = json.load(json_file)
             label = roi['label']
-            if label != 'unmarked':
+            if self.parent.mode != 'reannotation':
                 dropped_points = self.parent.dropped_points
                 print('unmarked', dropped_points)
-            else:
+            else:  # 模式为继续标注时，读取文件中的dropped_points
                 dropped_points = roi['drop points']
                 print('marked', dropped_points)
 
@@ -618,13 +617,13 @@ class OnePeakScoreWindow(QtWidgets.QDialog):
 
         if self.parent.current_flag:
             self.parent.current_flag = False
-            self.parent.annotated_rois_list.addFile(self.parent.plotted_path)
+            # self.parent.annotated_rois_list.addFile(self.parent.plotted_path)
             self.parent.file_suffix += 1
             self.parent.plot_current()
         else:
             self.parent.plotted_item.setSelected(False)
             index = min(self.parent.annotated_rois_list.row(self.parent.plotted_item) + 1, self.parent.annotated_rois_list.count() - 1)
-            self.parent.plotted_item = self.parent.annotated_rois_list.item(index)
+            # self.parent.plotted_item = self.parent.annotated_rois_list.item(index)
             self.parent.plotted_item.setSelected(True)
             self.parent.plot_chosen()
         self.close()

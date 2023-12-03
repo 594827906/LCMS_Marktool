@@ -13,6 +13,7 @@ def find_mzML(path, array=None):
             array.append(obj_path)
     return array
 
+
 class ClickableListWidget(QtWidgets.QListWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
