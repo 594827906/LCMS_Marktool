@@ -1,5 +1,6 @@
 import os
-from PyQt5 import QtWidgets, QtCore
+import json
+from PyQt5 import QtWidgets, QtCore, QtGui
 
 
 def find_mzML(path, array=None):
@@ -63,6 +64,7 @@ class FileListWidget(ClickableListWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.file2path = {}
+
     def addFile(self, path: str):
         filename = os.path.basename(path)
         self.file2path[filename] = path
@@ -76,17 +78,42 @@ class FileListWidget(ClickableListWidget):
         return self.file2path[item.text()]
 
 
-class ROIListWidget(ClickableListWidget):  # 暂时没用
+class ROIListWidget(ClickableListWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.raw_rois_list = None
+        self.file2path = {}
 
-    def addROI(self):
-        index = min(self.raw_rois_list.row(self.plotted_item) + 1, self.raw_rois_list.count() - 1)
-        self.raw_rois_list.addItem(index)
+    def addFile(self, path: str):
+        filename = os.path.basename(path)
+        self.file2path[filename] = path
+        with open(path) as json_file:
+            roi = json.load(json_file)
+        status = roi['label']
+        # file_name_label = QtWidgets.QLabel(filename)
+        # file_status_label = QtWidgets.QLabel(status)
+        item = QtWidgets.QListWidgetItem()
+        item.setText(filename)
+        if status == 0:
+            pass
+        elif status == 1:
+            pass
+        else:  # 高亮未标注的文件
+            item.setData(QtCore.Qt.BackgroundRole, QtGui.QColor("yellow"))
+        self.addItem(item)
 
-    def deleteROI(self, item: QtWidgets.QListWidgetItem):
+    def refresh_background(self, path: str):
+        filename = os.path.basename(path)
+        items = self.findItems(filename, QtCore.Qt.MatchExactly)
+        item = items[0]
+        item.setData(QtCore.Qt.BackgroundRole, QtGui.QColor("white"))
+
+    def deleteFile(self, item: QtWidgets.QListWidgetItem):
+        del self.file2path[item.text()]
         self.takeItem(self.row(item))
+
+    def getPath(self, item: QtWidgets.QListWidgetItem):
+        return self.file2path[item.text()]
+
 
 class PeakListWidget(ClickableListWidget):
     def __init__(self, *args, **kwargs):

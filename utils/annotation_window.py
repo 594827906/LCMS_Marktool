@@ -69,7 +69,7 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
             self.list_of_files.addFile(file)
 
         save_to_label = QtWidgets.QLabel()
-        save_to_label.setText('选择保存标注文件的目录（建议选择空目录）：')
+        save_to_label.setText('选择保存标注文件的目录（请选择空目录）：')
         self.folder_widget = GetFolderWidget()
 
         file_layout = QtWidgets.QVBoxLayout()
@@ -176,15 +176,6 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
             ROI.save_annotated(rois[file_suffix], plotted_path, code, 'unmarked',
                                drop_points=dropped_points, description=self.description)
             file_suffix += 1
-        # if current_flag:
-        #     current_flag = False
-        #     annotated_rois_list.addFile(plotted_path)
-        #     file_suffix += 1
-        # else:
-        #     plotted_item.setSelected(False)
-        #     index = min(annotated_rois_list.row(plotted_item) + 1, annotated_rois_list.count() - 1)
-        #     plotted_item = annotated_rois_list.item(index)
-        #     plotted_item.setSelected(True)
 
     def _start_annotation(self, rois):
         dropped_points = int(self.dropped_points_getter.text())
@@ -213,20 +204,13 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         self.current_flag = False
 
         self.ROIs = ROIs
-        # np.random.seed(1313)
-        # np.random.shuffle(self.ROIs)
 
         self.figure = plt.figure()  # a figure instance to plot on
         self.canvas = FigureCanvas(self.figure)
 
-        # self.raw_rois_list = ROIListWidget()
-        # self.raw_rois_list.connectDoubleClick(self.file_double_click)
-
-        self.annotated_rois_list = FileListWidget()  # 已标注的ROI列表
-        self.annotated_rois_list.connectRightClick(self.file_right_click)
-        self.annotated_rois_list.connectDoubleClick(self.file_double_click)
-
-        # self.raw_rois_list.addItems(self.ROIs)
+        self.rois_list = ROIListWidget()  # 已标注的ROI列表
+        self.rois_list.connectRightClick(self.file_right_click)
+        self.rois_list.connectDoubleClick(self.file_double_click)
 
         files = []
         for created_file in os.listdir(self.folder):
@@ -236,7 +220,7 @@ class AnnotationMainWindow(QtWidgets.QDialog):
                 code = int(created_file[begin:end])
                 files.append((code, created_file))
         for _, file in sorted(files):
-            self.annotated_rois_list.addFile(os.path.join(self.folder, file))
+            self.rois_list.addFile(os.path.join(self.folder, file))
 
         self._init_ui()  # initialize user interface
         if mode != 'reannotation':
@@ -253,17 +237,22 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         canvas_layout.addWidget(self.canvas)
 
         # ROI list layout
-        roi_label = QtWidgets.QLabel('当前文件ROI总数：')  # TODO:当模式为继续标注时，读取目录下的文件总数
         self.roi_cnt = QtWidgets.QLabel(self)
-        self.roi_cnt.setNum(len(self.ROIs))  # 获取当前生成ROI的个数
+        if self.mode != 'reannotation':
+            roi_label = QtWidgets.QLabel('当前文件ROI总数：')
+            self.roi_cnt.setNum(len(self.ROIs))  # 获取当前生成ROI的个数
+        else:
+            roi_label = QtWidgets.QLabel('当前目录下ROI总数：')  # 当模式为继续标注时，读取目录下的文件总数
+            file_cnt = self.rois_list.count()
+            self.roi_cnt.setNum(file_cnt)
         # annotation progress
-        print(len(self.ROIs))
+        print('ROI个数', len(self.ROIs))
         roi_list_layout = QtWidgets.QVBoxLayout()
         roi_progress = QtWidgets.QHBoxLayout()
         roi_progress.addWidget(roi_label)
         roi_progress.addWidget(self.roi_cnt)
         roi_list_layout.addLayout(roi_progress)
-        roi_list_layout.addWidget(self.annotated_rois_list)
+        roi_list_layout.addWidget(self.rois_list)
 
         # canvas and ROI list layout
         canvas_files_layout = QtWidgets.QHBoxLayout()
@@ -272,8 +261,8 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         canvas_files_layout.addLayout(roi_list_layout, 20)
 
         # plot current button
-        plot_current_button = QtWidgets.QPushButton('回到当前')
-        plot_current_button.clicked.connect(self.plot_current)
+        # plot_current_button = QtWidgets.QPushButton('回到当前')
+        # plot_current_button.clicked.connect(self.plot_current)
 
         # noise button
         noise_button = QtWidgets.QPushButton('0分（噪声）')
@@ -293,7 +282,7 @@ class AnnotationMainWindow(QtWidgets.QDialog):
 
         # button layout
         button_layout = QtWidgets.QHBoxLayout()
-        button_layout.addWidget(plot_current_button)
+        # button_layout.addWidget(plot_current_button)
         button_layout.addWidget(noise_button)
         button_layout.addWidget(peak_button)
         button_layout.addWidget(peaks_button)
@@ -316,20 +305,20 @@ class AnnotationMainWindow(QtWidgets.QDialog):
 
     def get_chosen(self):
         chosen_item = None
-        for item in self.annotated_rois_list.selectedItems():
+        for item in self.rois_list.selectedItems():
             chosen_item = item
         return chosen_item
 
     def close_file(self, item):
         if item == self.plotted_item:
-            index = min(self.annotated_rois_list.row(self.plotted_item) + 1, self.annotated_rois_list.count() - 2)
-            self.plotted_item = self.annotated_rois_list.item(index)
+            index = min(self.rois_list.row(self.plotted_item) + 1, self.rois_list.count() - 2)
+            self.plotted_item = self.rois_list.item(index)
             self.plotted_item.setSelected(True)
             self.plot_chosen()
-        self.annotated_rois_list.deleteFile(item)
+        self.rois_list.deleteFile(item)
 
     def delete_file(self, item):
-        os.remove(self.annotated_rois_list.getPath(item))
+        os.remove(self.rois_list.getPath(item))
         self.close_file(item)
 
     # Buttons
@@ -338,16 +327,18 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         code = code[:code.rfind('.')]
         label = 0
         self.plotted_roi.save_annotated(self.plotted_path, code, label, description=self.current_description)
+        self.rois_list.refresh_background(self.plotted_path)  # 更新列表背景
+
 
         if self.current_flag:
             self.current_flag = False
-            self.annotated_rois_list.addFile(self.plotted_path)
+            # self.rois_list.addFile(self.plotted_path)
             self.file_suffix += 1
             self.plot_current()
         else:
             self.plotted_item.setSelected(False)
-            index = min(self.annotated_rois_list.row(self.plotted_item) + 1, self.annotated_rois_list.count() - 1)
-            self.plotted_item = self.annotated_rois_list.item(index)
+            index = min(self.rois_list.row(self.plotted_item) + 1, self.rois_list.count() - 1)
+            self.plotted_item = self.rois_list.item(index)
             self.plotted_item.setSelected(True)
             self.plot_chosen()
 
@@ -366,8 +357,8 @@ class AnnotationMainWindow(QtWidgets.QDialog):
             self.plot_current()
         else:
             self.plotted_item.setSelected(False)
-            index = min(self.annotated_rois_list.row(self.plotted_item) + 1, self.annotated_rois_list.count() - 1)
-            self.plotted_item = self.annotated_rois_list.item(index)
+            index = min(self.rois_list.row(self.plotted_item) + 1, self.rois_list.count() - 1)
+            self.plotted_item = self.rois_list.item(index)
             self.plotted_item.setSelected(True)
             self.plot_chosen()
 
@@ -389,7 +380,7 @@ class AnnotationMainWindow(QtWidgets.QDialog):
                                             begins, ends, intersections, self.description)
 
             self.current_flag = False
-            self.annotated_rois_list.addFile(self.plotted_path)
+            self.rois_list.addFile(self.plotted_path)
             self.file_suffix += 1
             self.plot_current()
 
@@ -432,7 +423,7 @@ class AnnotationMainWindow(QtWidgets.QDialog):
 
     def plot_chosen(self):
         filename = self.plotted_item.text()
-        path2roi = self.annotated_rois_list.file2path[filename]
+        path2roi = self.rois_list.file2path[filename]
         with open(path2roi) as json_file:
             roi = json.load(json_file)
         self.current_description = roi['description']
@@ -614,16 +605,17 @@ class OnePeakScoreWindow(QtWidgets.QDialog):
 
         self.parent.plotted_roi.save_annotated(self.parent.plotted_path, code, label, 1,
                                                peaks_score, borders, description=self.parent.current_description)
+        self.parent.rois_list.refresh_background(self.parent.plotted_path)  # 更新列表背景
 
         if self.parent.current_flag:
             self.parent.current_flag = False
-            # self.parent.annotated_rois_list.addFile(self.parent.plotted_path)
+            # self.parent.rois_list.addFile(self.parent.plotted_path)
             self.parent.file_suffix += 1
             self.parent.plot_current()
         else:
             self.parent.plotted_item.setSelected(False)
-            index = min(self.parent.annotated_rois_list.row(self.parent.plotted_item) + 1, self.parent.annotated_rois_list.count() - 1)
-            # self.parent.plotted_item = self.parent.annotated_rois_list.item(index)
+            index = min(self.parent.rois_list.row(self.parent.plotted_item) + 1, self.parent.rois_list.count() - 1)
+            self.parent.plotted_item = self.parent.rois_list.item(index)
             self.parent.plotted_item.setSelected(True)
             self.parent.plot_chosen()
         self.close()
@@ -706,7 +698,7 @@ class AnnotationPeaksWindow(QtWidgets.QWidget):  # 多峰标注设置
         return n
 
 
-class AnnotationGetBordersWindowNovel(QtWidgets.QDialog):  # 标注界面
+class AnnotationGetBordersWindowNovel(QtWidgets.QDialog):  # 多峰标注界面
     def __init__(self, number_of_peaks: int, parent: AnnotationMainWindow):
         # self.str2label = {'': 0, '<None>': 0, 'Good (smooth, high intensive)': 1,
         #                   'Low intensive (close to LOD)': 2, 'Lousy (not good)': 3,
@@ -714,7 +706,7 @@ class AnnotationGetBordersWindowNovel(QtWidgets.QDialog):  # 标注界面
         self.number_of_peaks = number_of_peaks
         self.parent = parent
         super().__init__(parent)
-        self.setWindowTitle("峰标注")
+        self.setWindowTitle("多峰标注")
 
         main_layout = QtWidgets.QVBoxLayout()
         self.peak_layouts = []
@@ -722,11 +714,11 @@ class AnnotationGetBordersWindowNovel(QtWidgets.QDialog):  # 标注界面
             self.peak_layouts.append(AnnotationPeaksWindow(i + 1, self))
             main_layout.addWidget(self.peak_layouts[-1])
 
-        preview_button = QtWidgets.QPushButton('Preview')
+        preview_button = QtWidgets.QPushButton('预览')
         preview_button.clicked.connect(self.preview)
         main_layout.addWidget(preview_button)
 
-        save_button = QtWidgets.QPushButton('Save')
+        save_button = QtWidgets.QPushButton('保存')
         save_button.clicked.connect(self.save)
         main_layout.addWidget(save_button)
 
@@ -775,16 +767,17 @@ class AnnotationGetBordersWindowNovel(QtWidgets.QDialog):  # 标注界面
 
         self.parent.plotted_roi.save_annotated(self.parent.plotted_path, code, label, number_of_peaks,
                                                peaks_score, borders, description=self.parent.current_description)
+        self.parent.rois_list.refresh_background(self.parent.plotted_path)  # 更新列表背景
 
         if self.parent.current_flag:
             self.parent.current_flag = False
-            self.parent.annotated_rois_list.addFile(self.parent.plotted_path)
+            self.parent.rois_list.addFile(self.parent.plotted_path)
             self.parent.file_suffix += 1
             self.parent.plot_current()
         else:
             self.parent.plotted_item.setSelected(False)
-            index = min(self.parent.annotated_rois_list.row(self.parent.plotted_item) + 1, self.parent.annotated_rois_list.count() - 1)
-            self.parent.plotted_item = self.parent.annotated_rois_list.item(index)
+            index = min(self.parent.rois_list.row(self.parent.plotted_item) + 1, self.parent.rois_list.count() - 1)
+            self.parent.plotted_item = self.parent.rois_list.item(index)
             self.parent.plotted_item.setSelected(True)
             self.parent.plot_chosen()
         self.close()
