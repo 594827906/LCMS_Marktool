@@ -50,7 +50,6 @@ class ROI:
         roi['scan'] = self.scan
         roi['intensity'] = list(map(float, self.i))
         roi['mz'] = list(map(float, self.mz))
-        print(path)
 
         with open(path, 'w') as jsonfile:
             json.dump(roi, jsonfile)
@@ -72,12 +71,13 @@ def get_closest(mzmean, mz, pos):
     return res
 
 
-def get_ROIs(path, delta_mz=0.005, required_points=15, dropped_points=3, progress_callback=None):
+def get_ROIs(path, delta_mz=0.005, required_points=15, intensity_threshold=1000, dropped_points=3, progress_callback=None):
     '''
     :param path: path to mzml file
     :param delta_mz:
     :param required_points:
     :param dropped_points: can be zero points
+    :param intensity_threshold:
     :param pbar: an pyQt5 progress bar to visualize
     :return: ROIs - a list of ROI objects found in current file
     '''
@@ -174,13 +174,16 @@ def get_ROIs(path, delta_mz=0.005, required_points=15, dropped_points=3, progres
             elif roi.scan[1] != number:
                 to_delete.append(mz)
                 if roi.points >= required_points:
-                    ROIs.append(ROI(
-                        roi.scan,
-                        roi.rt,
-                        roi.i,
-                        roi.mz,
-                        roi.mzmean
-                    ))
+                    if max(roi.i) > intensity_threshold:
+                        ROIs.append(ROI(
+                            roi.scan,
+                            roi.rt,
+                            roi.i,
+                            roi.mz,
+                            roi.mzmean
+                        ))
+                    # else:  # 调试信息
+                    #     print(max(roi.i))
         process_ROIs.remove_items(to_delete)
         try:
             min_mz, _ = process_ROIs.min_item()

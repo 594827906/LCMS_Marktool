@@ -1,5 +1,6 @@
 import os
 import json
+import pymzml
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -60,6 +61,8 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
 
         self._init_ui()
 
+        self.list_of_files.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.list_of_files.connectDoubleClick(self.get_freq)  # 双击获取扫描频率
     def _init_ui(self):
         # file and folder selection
         choose_file_label = QtWidgets.QLabel()
@@ -81,9 +84,9 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
         # parameters selection
 
         instrumental_label = QtWidgets.QLabel()
-        instrumental_label.setText('仪器描述（非必要）：')
-        self.instrumental_getter = QtWidgets.QLineEdit(self)
-        self.instrumental_getter.setText('Q-oa-TOF, total time=10 min, scan frequency=10Hz')
+        instrumental_label.setText('*双击文件可获取扫描时长&频率')
+        self.instrumental_getter = QtWidgets.QLabel()
+        self.instrumental_getter.setText('total time = , freq = ')
 
         prefix_label = QtWidgets.QLabel()
         prefix_label.setText('文件前缀：')
@@ -110,6 +113,11 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
         self.dropped_points_getter = QtWidgets.QLineEdit(self)
         self.dropped_points_getter.setText('3')
 
+        intensity_threshold_label = QtWidgets.QLabel()
+        intensity_threshold_label.setText('最小强度阈值：')
+        self.intensity_threshold_getter = QtWidgets.QLineEdit(self)
+        self.intensity_threshold_getter.setText('1000')
+
         run_button = QtWidgets.QPushButton('生成')
         run_button.clicked.connect(self._run_button)
 
@@ -126,6 +134,8 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
         parameter_layout.addWidget(self.roi_points_getter)
         parameter_layout.addWidget(dropped_points_label)
         parameter_layout.addWidget(self.dropped_points_getter)
+        parameter_layout.addWidget(intensity_threshold_label)
+        parameter_layout.addWidget(self.intensity_threshold_getter)
         parameter_layout.addWidget(run_button)
 
         # main layout
@@ -137,12 +147,13 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
 
     def _run_button(self):
         try:
-            self.description = self.instrumental_getter.text()
+            self.description = self.instrumental_getter.text() + ', intensity_thr = ' + self.intensity_threshold_getter.text()
             self.file_prefix = self.prefix_getter.text()
             self.file_suffix = int(self.suffix_getter.text())
             delta_mz = float(self.mz_getter.text())
             min_points = int(self.roi_points_getter.text())
             dropped_points = int(self.dropped_points_getter.text())
+            intensity_threshold = int(self.intensity_threshold_getter.text())
 
             self.folder = self.folder_widget.get_folder()
             path2mzml = None
@@ -151,7 +162,7 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
             if path2mzml is None:
                 raise ValueError
 
-            worker = Worker(get_ROIs, path2mzml, delta_mz, min_points, dropped_points)
+            worker = Worker(get_ROIs, path2mzml, delta_mz, min_points, intensity_threshold, dropped_points)
             worker.signals.result.connect(self._save)
             worker.signals.result.connect(self._start_annotation)
             self.parent.run_thread('构建ROI并保存到指定目录：', worker)  # 进度条
@@ -165,7 +176,6 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
             msg.exec_()
 
     def _save(self, rois):
-        print('save in, length of roi = ', len(rois))
         for file_suffix in range(0, len(rois)):
             dropped_points = int(self.dropped_points_getter.text())
             filename = f'{self.file_prefix}_{file_suffix}.json'
@@ -184,6 +194,40 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
                                          dropped_points, parent=self.parent)
 
         subwindow.show()
+
+    def get_freq(self, item):
+        spectrum_count = 0
+        t = 0
+        measure = 'second'
+        get_selected_files = self.list_of_files.selectedItems()
+        for file in get_selected_files:
+            filename = file.text()
+            path2file = self.list_of_files.file2path[filename]
+            run = pymzml.run.Reader(path2file)
+            spectrum_count = run.get_spectrum_count()  # scan总数
+            # freq = run.scan_time_in_minutes()
+            for spectrum in run:
+                if spectrum.ID == spectrum_count:  # 读取扫描时长
+                    t, measure = spectrum.scan_time  # get scan time 扫描总时长
+                    print(spectrum.ID, spectrum_count, t, measure)
+        if measure == 'millisecond':
+            measure = 'ms'
+            frequency = spectrum_count / t * 1000
+        elif measure == 'minute':
+            measure = 'min'
+            frequency = spectrum_count / t / 60
+        elif measure == 'hour':
+            measure = 'h'
+            frequency = spectrum_count / t / 360
+        else:
+            measure = 's'
+            frequency = spectrum_count / t
+        t = "{:.3f}".format(t)
+        frequency = "{:.2f}".format(frequency)
+
+        time = str(t)
+        freq = str(frequency)
+        self.instrumental_getter.setText('total time = ' + time + measure + ', freq = ' + freq + 'Hz')
 
 
 class AnnotationMainWindow(QtWidgets.QDialog):
@@ -328,7 +372,6 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         label = 0
         self.plotted_roi.save_annotated(self.plotted_path, code, label, description=self.current_description)
         self.rois_list.refresh_background(self.plotted_path)  # 更新列表背景
-
 
         if self.current_flag:
             self.current_flag = False
@@ -478,13 +521,13 @@ class AnnotationGetNumberOfPeaksNovel(QtWidgets.QDialog):
 
         n_of_peaks_layout = QtWidgets.QHBoxLayout()
         n_of_peaks_label = QtWidgets.QLabel()
-        n_of_peaks_label.setText('number of peaks = ')
+        n_of_peaks_label.setText('峰个数 = ')
         self.n_of_peaks_getter = QtWidgets.QLineEdit(self)
         self.n_of_peaks_getter.setText('2')
         n_of_peaks_layout.addWidget(n_of_peaks_label)
         n_of_peaks_layout.addWidget(self.n_of_peaks_getter)
 
-        continue_button = QtWidgets.QPushButton('Continue')
+        continue_button = QtWidgets.QPushButton('确定')
         continue_button.clicked.connect(self.proceed)
 
         main_layout = QtWidgets.QVBoxLayout()
@@ -561,7 +604,7 @@ class OnePeakScoreWindow(QtWidgets.QDialog):
         main_layout.addLayout(layout_score_row1)
         main_layout.addLayout(layout_score_row2)
 
-        save_button = QtWidgets.QPushButton('Save')
+        save_button = QtWidgets.QPushButton('保存')
         save_button.clicked.connect(self.save)
         # save_button.setShortcut(QtCore.Qt.Key_Return)  # test
         main_layout.addWidget(save_button)
@@ -579,12 +622,10 @@ class OnePeakScoreWindow(QtWidgets.QDialog):
             with open(self.parent.plotted_path) as json_file:
                 roi = json.load(json_file)
             label = roi['label']
-            if self.parent.mode != 'reannotation':
+            if self.parent.mode != 'reannotation':  # 首次标注时，获取文本框中的dropped_points
                 dropped_points = self.parent.dropped_points
-                print('unmarked', dropped_points)
             else:  # 模式为继续标注时，读取文件中的dropped_points
                 dropped_points = roi['drop points']
-                print('marked', dropped_points)
 
             code = code[:code.rfind('.')]
             label = 1
@@ -706,7 +747,7 @@ class AnnotationGetBordersWindowNovel(QtWidgets.QDialog):  # 多峰标注界面
         self.number_of_peaks = number_of_peaks
         self.parent = parent
         super().__init__(parent)
-        self.setWindowTitle("多峰标注")
+        self.setWindowTitle("多峰边界标注")
 
         main_layout = QtWidgets.QVBoxLayout()
         self.peak_layouts = []
@@ -806,9 +847,6 @@ class FileContextMenu(QtWidgets.QMenu):
             self.delete_file()
         # elif action == self.reannotation:
         #     self.reannotation()
-
-    def reannotation(self):  # TODO:修改标注
-        pass
 
     def close_file(self):
         item = self.parent.get_chosen()
