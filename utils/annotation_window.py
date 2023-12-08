@@ -171,7 +171,7 @@ class AnnotationParameterWindow(QtWidgets.QDialog):
         except ValueError:
             # popup window with exception
             msg = QtWidgets.QMessageBox(self)
-            msg.setText("请检查：\n1.是否已选中一个待标注文件\n2.最小ROI长度及连续零点数应输入整数")
+            msg.setText("请检查：\n1.是否已选中一个待标注文件\n2.最小ROI长度、连续零点数、峰阈值应输入整数")
             msg.setIcon(QtWidgets.QMessageBox.Warning)
             msg.exec_()
 
@@ -320,9 +320,9 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         # skip button
         skip_button = QtWidgets.QPushButton('Skip')
         skip_button.clicked.connect(self.skip)
-        # plot chosen button
-        # plot_chosen_button = QtWidgets.QPushButton('Plot chosen ROI')
-        # plot_chosen_button.clicked.connect(self.press_plot_chosen)
+        # count button
+        count_button = QtWidgets.QPushButton('统计分数分布')
+        count_button.clicked.connect(self.count)
 
         # button layout
         button_layout = QtWidgets.QHBoxLayout()
@@ -331,7 +331,7 @@ class AnnotationMainWindow(QtWidgets.QDialog):
         button_layout.addWidget(peak_button)
         button_layout.addWidget(peaks_button)
         button_layout.addWidget(skip_button)
-        # button_layout.addWidget(plot_chosen_button)
+        button_layout.addWidget(count_button)
 
         # main layout
         main_layout = QtWidgets.QVBoxLayout()
@@ -404,6 +404,27 @@ class AnnotationMainWindow(QtWidgets.QDialog):
             self.plotted_item = self.rois_list.item(index)
             self.plotted_item.setSelected(True)
             self.plot_chosen()
+
+    def count(self):
+        noise = 0
+        scores = []
+        for filename in self.rois_list.file2path:
+            path2roi = self.rois_list.file2path[filename]
+            with open(path2roi) as json_file:
+                roi = json.load(json_file)
+                if roi['label'] == 0:
+                    scores.append(0)
+                    noise += 1
+                elif roi['label'] == 1:
+                    for i in range(0, len(roi["peaks' score"])):
+                        score = roi["peaks' score"][i]
+                        scores.append(score)
+        fig_cnt = plt.figure('calculate')
+        plt.xlabel('scores')
+        plt.ylabel('count')
+        plt.xticks(scores)
+        plt.hist(scores, bins=np.arange(-0.5, 11.5), edgecolor='w')
+        fig_cnt.show()
 
     def save_auto_annotation(self):
         if self.current_flag:
@@ -630,8 +651,9 @@ class OnePeakScoreWindow(QtWidgets.QDialog):
             code = code[:code.rfind('.')]
             label = 1
             borders = []
-            peak_score = self.peak_score_getter.text()
-            peaks_score = [peak_score]
+            peaks_score = []
+            peak_score = int(self.peak_score_getter.text())
+            peaks_score.append(peak_score)
             roi_length = self.parent.plotted_roi.scan[1] - self.parent.plotted_roi.scan[0]  # 获取ROI scan数
 
             begin = dropped_points - 1
@@ -780,7 +802,7 @@ class AnnotationGetBordersWindowNovel(QtWidgets.QDialog):  # 多峰标注界面
         except ValueError:
             # popup window with exception
             msg = QtWidgets.QMessageBox(self)
-            msg.setText("始末点应为横坐标范围内整数")
+            msg.setText("1.始末点应为横坐标范围内整数\n2.对每个峰分别评分")
             msg.setIcon(QtWidgets.QMessageBox.Warning)
             msg.exec_()
 
@@ -794,34 +816,35 @@ class AnnotationGetBordersWindowNovel(QtWidgets.QDialog):  # 多峰标注界面
             borders = []
             for ps in self.peak_layouts:
                 peak_score = ps.peak_score_getter.text()
+                peak_score = int(peak_score)
                 peaks_score.append(peak_score)
 
                 begin = int(ps.begin_getter.text())
                 end = int(ps.end_getter.text())
                 borders.append((begin, end))
+
+            self.parent.plotted_roi.save_annotated(self.parent.plotted_path, code, label, number_of_peaks,
+                                                   peaks_score, borders, description=self.parent.current_description)
+            self.parent.rois_list.refresh_background(self.parent.plotted_path)  # 更新列表背景
+
+            if self.parent.current_flag:
+                self.parent.current_flag = False
+                self.parent.rois_list.addFile(self.parent.plotted_path)
+                self.parent.file_suffix += 1
+                self.parent.plot_current()
+            else:
+                self.parent.plotted_item.setSelected(False)
+                index = min(self.parent.rois_list.row(self.parent.plotted_item) + 1, self.parent.rois_list.count() - 1)
+                self.parent.plotted_item = self.parent.rois_list.item(index)
+                self.parent.plotted_item.setSelected(True)
+                self.parent.plot_chosen()
+            self.close()
         except ValueError:
             # popup window with exception
             msg = QtWidgets.QMessageBox(self)
-            msg.setText("始末点应为横坐标范围内整数")
+            msg.setText("1.始末点应为横坐标范围内整数\n2.对每个峰分别评分")
             msg.setIcon(QtWidgets.QMessageBox.Warning)
             msg.exec_()
-
-        self.parent.plotted_roi.save_annotated(self.parent.plotted_path, code, label, number_of_peaks,
-                                               peaks_score, borders, description=self.parent.current_description)
-        self.parent.rois_list.refresh_background(self.parent.plotted_path)  # 更新列表背景
-
-        if self.parent.current_flag:
-            self.parent.current_flag = False
-            self.parent.rois_list.addFile(self.parent.plotted_path)
-            self.parent.file_suffix += 1
-            self.parent.plot_current()
-        else:
-            self.parent.plotted_item.setSelected(False)
-            index = min(self.parent.rois_list.row(self.parent.plotted_item) + 1, self.parent.rois_list.count() - 1)
-            self.parent.plotted_item = self.parent.rois_list.item(index)
-            self.parent.plotted_item.setSelected(True)
-            self.parent.plot_chosen()
-        self.close()
 
 
 class FileContextMenu(QtWidgets.QMenu):
